@@ -1,15 +1,16 @@
-"""Login command — QR code authentication."""
+"""Login command — QR code authentication (RedCrack-compatible)."""
 
 from __future__ import annotations
 
 import asyncio
+import time
 import typer
 from rednote_core.crypto import generate_cookies
 from rednote_core.client import XHSClient
 from rednote_core.auth import login_qrcode, check_login, save_cookies, load_cookies
 from rednote_core.config import load_config
 
-login_app = typer.Typer(help="认证管理", no_args_is_help=True)
+login_app = typer.Typer(help="认证管理")
 
 
 @login_app.callback(invoke_without_command=True)
@@ -20,26 +21,25 @@ def login_default(ctx: typer.Context):
 
 
 async def _do_login():
-    """Execute the login flow."""
+    """Execute the QR login flow with RedCrack-compatible session init."""
     config = load_config()
-
-    local_cookies = generate_cookies()
-    print(f"✅ 生成设备指纹: a1={local_cookies['a1'][:8]}...")
-
     proxy = config["client"]["proxy"]
-    client = XHSClient(
+
+    # Create fully initialized session (scripting + gid + activate)
+    print("📦 初始化会话...")
+    client = await XHSClient.create(
         proxy=proxy,
-        cookies=local_cookies,
         timeout=config["client"]["timeout"],
         retry_interval=config["client"]["retry_interval"],
         request_interval=0,
     )
+    print(f"✅ 会话就绪: a1={client.cookies['a1'][:16]}...")
 
     try:
         print("📱 生成登录二维码...\n")
         new_cookies = await login_qrcode(client)
 
-        all_cookies = {**local_cookies, **new_cookies}
+        all_cookies = {**client.cookies, **new_cookies}
         cookies_file = config["auth"]["cookies_file"]
         save_cookies(all_cookies, cookies_file)
         print(f"✅ Cookie 已保存到 {cookies_file}")
@@ -65,10 +65,9 @@ def login_status():
         return
 
     proxy = config["client"]["proxy"]
-    all_cookies = {**generate_cookies(), **cookies}
 
     async def _check():
-        client = XHSClient(proxy=proxy, cookies=all_cookies)
+        client = await XHSClient.create(proxy=proxy, web_session=cookies.get("web_session"))
         try:
             ok = await check_login(client)
             if ok:

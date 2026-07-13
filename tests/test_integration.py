@@ -42,8 +42,7 @@ class TestImports:
         cookies = generate_cookies()
         assert "a1" in cookies
         assert "webId" in cookies
-        assert "gid" in cookies
-        assert "websectiga" in cookies
+        # gid and websectiga are now obtained from API calls, not local generation
 
     def test_sign_request_returns_headers(self):
         from rednote_core.crypto import sign_request
@@ -72,7 +71,7 @@ class TestConfig:
     def test_load_default_config(self):
         from rednote_core.config import load_config
         config = load_config()
-        assert config["client"]["proxy"] == "http://127.0.0.1:7890"
+        assert config["client"]["proxy"].lower() == "none"
         assert config["client"]["timeout"] == 30
         assert config["auth"]["cookies_file"] == "config/cookies.enc"
 

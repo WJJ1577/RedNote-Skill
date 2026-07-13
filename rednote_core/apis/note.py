@@ -36,6 +36,14 @@ async def get_note_detail(
     interact = nc.get("interact_info", {})
     user = nc.get("user", {})
 
+    # Extract image URLs from image_list[].info_list[].url (WB_DFT scene)
+    image_urls = []
+    for img in nc.get("image_list", []):
+        for info in img.get("info_list", []):
+            if info.get("image_scene") == "WB_DFT":
+                image_urls.append(info.get("url", ""))
+                break
+
     return NoteDetail(
         note_id=nc.get("note_id", ""),
         title=nc.get("title", ""),
@@ -53,7 +61,7 @@ async def get_note_detail(
             share_count=int(interact.get("share_count", 0)),
         ) if interact else None,
         tag_list=[t.get("name", "") for t in nc.get("tag_list", [])],
-        image_list=[img.get("url", "") for img in nc.get("image_list", [])],
+        image_list=image_urls,
         time=int(nc.get("time", 0)),
         ip_location=nc.get("ip_location", ""),
         update_time=int(nc.get("update_time", 0)),

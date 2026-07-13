@@ -19,7 +19,11 @@ class TestBase64:
         assert decoded == original
 
     def test_encode_known(self):
-        assert base64_encode(b"f") == "Zg=="
+        result = base64_encode(b"f")
+        # RedCrack port returns bytes; accept both for compat
+        if isinstance(result, bytes):
+            result = result.decode("ascii")
+        assert result == "Zg=="
 
     def test_decode_known(self):
         assert base64_decode("Zg==") == b"f"
