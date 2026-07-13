@@ -67,16 +67,16 @@ async def login_qrcode(
         if not status_data.get("success"):
             continue
 
-        code_status = status_data.get("data", {}).get("code_status", "")
+        code_status = str(status_data.get("data", {}).get("code_status", ""))
 
         if code_status == "2":
             # Scan successful! Extract cookies
             new_cookies = {}
 
-            # Try response cookies first
-            for c in status_resp.cookies.jar:
-                if c.name in ("web_session", "sec_poison_id", "acw_tc"):
-                    new_cookies[c.name] = c.value
+            # Try response cookies
+            for name, value in status_resp._cookies.items():
+                if name in ("web_session", "sec_poison_id", "acw_tc"):
+                    new_cookies[name] = value
 
             # Fallback: extract from set-cookie headers
             set_cookie = status_resp.headers.get("set-cookie", "")
@@ -114,12 +114,27 @@ async def login_qrcode(
 
 
 def _print_qr_terminal(url: str) -> None:
-    """Print QR code to terminal."""
-    qr = qrcode.QRCode(border=1)
+    """Print QR code to terminal AND save as PNG for display."""
+    import tempfile, os
+
+    qr = qrcode.QRCode(border=2, box_size=10)
     qr.add_data(url)
     qr.make(fit=True)
-    qr.print_ascii(invert=True)
-    print(f"\n📱 扫描上方二维码，或打开: {url}")
+
+    # Save PNG image
+    img = qr.make_image(fill_color="black", back_color="white")
+    png_path = os.path.join(tempfile.gettempdir(), "rednote_qrcode.png")
+    img.save(png_path)
+
+    # Also print ASCII art for terminal users
+    ascii_qr = qrcode.QRCode(border=1)
+    ascii_qr.add_data(url)
+    ascii_qr.make(fit=True)
+    ascii_qr.print_ascii(invert=True)
+
+    print(f"\n📱 二维码图片已保存到: {png_path}")
+    print(f"🔗 登录链接: {url}")
+    print("请打开上方链接或用小红书APP扫描二维码")
     print("等待扫码... (超时: 120s)\n")
 
 
