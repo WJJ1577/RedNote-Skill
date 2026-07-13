@@ -2,8 +2,9 @@
 
 小红书（RedNote / Xiaohongshu）数据采集、运营分析、舆情监控 Skill — 作为 Claude Code Agent 的工具集运行。
 
-> **状态**：设计方案阶段 → 即将进入 v1 实现  
-> **v1 重点**：数据采集（搜索、笔记详情、用户主页、评论）
+> **状态**：v1 开发中
+> **当前进度**：Phase 1 — 加密层 ⏳
+> **进度详情**：[PROGRESS.md](PROGRESS.md)
 
 ---
 
@@ -30,13 +31,13 @@
               │
               ▼
          rednote CLI
-   (scrape / monitor / report
-    crypto / config)
+   (login / scrape / report
+    config)
               │
               ▼
         rednote_core
 (crypto / client / apis
- report / alert)
+ auth / report / config)
               │
               ▼
         小红书 API
@@ -52,32 +53,90 @@
 ```
 rednote-skill/
 ├── SKILL.md                     # Skill 本体（核心交付物）
+├── PROGRESS.md                  # 开发进度跟踪
 ├── pyproject.toml               # 项目配置 + CLI 入口点
 ├── rednote/                     # CLI 命令包
-│   └── commands/                #   scrape, monitor, report, crypto, config
+│   └── commands/                #   login, scrape, report, config
 ├── rednote_core/                # 内核库
-│   ├── crypto/                  #   加密参数生成与刷新
-│   ├── client/                  #   HTTP 请求、签名注入、重试
+│   ├── crypto/                  #   加密参数生成与签名
+│   │   ├── primitives/          #     底层加密原语 (AES, RSA, HMAC, Base64)
+│   │   ├── cookie/              #     Cookie 生成 (a1, webId, gid, websectiga)
+│   │   └── header/              #     Header 签名 (x-s, x-s-common, x-t, x-b3, x-ray, x-rap-param)
+│   ├── client/                  #   HTTP 客户端（Session, 签名注入, 重试, 代理）
 │   ├── apis/                    #   小红书 API 接口封装
+│   ├── auth/                    #   扫码登录流程编排
 │   ├── report/                  #   报告模板 + HTML 渲染
-│   └── alert/                   #   告警规则 + Webhook 推送
-├── workflows/                   # 编排工作流
-├── data/reports/                # HTML 报告产出
+│   └── config/                  #   配置管理
 ├── config/                      # 配置文件
-├── docs/                        # 设计文档
+│   ├── settings.yaml            #   全局配置
+│   └── cookies.enc              #   加密 Cookie（gitignore）
+├── data/reports/                # HTML 报告产出
+├── docs/                        # 设计文档 + API 参考
 └── tests/
 ```
 
+## v1 CLI 命令
+
+| 命令 | 用途 |
+|------|------|
+| `rednote login` | 扫码登录，自动保存 Cookie |
+| `rednote scrape search -k <关键词>` | 搜索笔记 |
+| `rednote scrape note <note_id>` | 笔记详情 |
+| `rednote scrape user <user_id>` | 用户信息 |
+| `rednote scrape user-notes <user_id>` | 用户笔记列表 |
+| `rednote scrape comments <note_id>` | 评论+子评论 |
+| `rednote scrape homefeed -c <品类>` | 品类推荐页 |
+| `rednote config show` | 查看当前配置 |
+| `rednote config set <key> <value>` | 设置配置 |
+| `rednote report daily` | 生成运营日报 |
+
 ## v1 接口覆盖
 
-| 接口 | 命令 |
-|------|------|
-| 搜索笔记 | `rednote scrape search` |
-| 笔记详情 | `rednote scrape note` |
-| 用户主页 | `rednote scrape user` |
-| 评论 | `rednote scrape comments` |
-| 点赞 | `rednote scrape likes` |
-| 关注/粉丝 | `rednote scrape follows` |
+| 接口 | 命令 | API |
+|------|------|-----|
+| 扫码登录 | `rednote login` | `qrcode/create` → `qrcode/status` → 保存 web_session |
+| 搜索笔记 | `rednote scrape search` | `POST /api/sns/web/v1/search/notes` |
+| 笔记详情 | `rednote scrape note` | `POST /api/sns/web/v1/feed` |
+| 用户信息 | `rednote scrape user` | `GET /api/sns/web/v1/user/otherinfo` |
+| 用户笔记 | `rednote scrape user-notes` | `GET /api/sns/web/v1/user_posted` |
+| 评论 | `rednote scrape comments` | `GET /api/sns/web/v2/comment/page` + `sub/page` |
+| 推荐页 | `rednote scrape homefeed` | `POST /api/sns/web/v1/homefeed` |
+
+### 认证流程
+
+```
+rednote login
+  → 生成本地 Cookie (a1, webId, gid, websectiga)
+  → 创建二维码 (POST qrcode/create)
+  → 终端显示二维码 (qrcode 库)
+  → 轮询扫码状态 (GET qrcode/status, 每2秒)
+  → 扫码成功 → 提取 web_session → AES 加密保存
+```
+
+### 加密体系
+
+**6 个请求签名 Header**：`x-s`, `x-s-common`, `x-t`, `x-b3-traceid`, `x-xray-traceid`, `x-rap-param`
+
+**7 个 Cookie**：`a1`, `webId`, `acw_tc`, `web_session`, `sec_poison_id`, `websectiga`, `gid`
+
+所有加密逻辑纯 Python 实现（基于 pycryptodomex），参考 [RedCrack](https://github.com/Cialle/RedCrack) 逆向分析。
+
+## 关键依赖与限制
+
+- **代理 IP 必填** — 小红书 API 强制要求非中国大陆 IP 代理
+- **请求频率控制** — 建议 2-5 秒间隔，避免触发反爬
+- **xsec_token 传递链** — 搜索→详情→评论，必须保持
+- **Cookie 有效期** — web_session 约数小时到数天，失效后需重新 `rednote login`
+
+## 技术栈
+
+- **语言**：Python
+- **CLI 框架**：Typer
+- **HTTP**：httpx (async)
+- **加密**：pycryptodomex（纯 Python 逆向）
+- **报告**：Jinja2 + 自包含 HTML（内嵌 CSS + 图表）
+- **二维码**：qrcode 库
+- **参考项目**：[RedCrack](https://github.com/Cialle/RedCrack)
 
 ## 后续路线
 
@@ -89,18 +148,12 @@ rednote-skill/
 | v4 | 互动评论管理 |
 | v5 | 深度分析复盘 |
 
-## 技术栈
-
-- **语言**：Python
-- **加密**：基于 PyCryptodome 的纯 Python 逆向
-- **CLI 框架**：Click / Typer
-- **报告**：自包含 HTML（内嵌 CSS + 图表）
-- **参考项目**：GitHub 上 `xiaohongshutools`
-
 ## 文档
 
-- [完整设计方案](rednote-skill-design.md)
-- [设计方案 spec 备份](docs/superpowers/specs/2026-07-09-rednote-skill-design.md)
+- [完整设计方案](rednote-skill-design.md)（原始头脑风暴）
+- [实现设计 Spec](docs/superpowers/specs/2026-07-13-rednote-cli-design.md)
+- [API 接口参考](docs/xhs-api-reference.md)
+- [开发进度](PROGRESS.md)
 
 ## 许可
 
