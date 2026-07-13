@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import time
 import logging
+import typing
 from typing import Optional
 
 import httpx
 
 from rednote_core.crypto import sign_request
+from rednote_core.crypto.fingerprint import update_fingerprint
 from rednote_core.client.exceptions import (
     CryptoError,
     AuthError,
@@ -19,22 +21,38 @@ from rednote_core.client.exceptions import (
 logger = logging.getLogger(__name__)
 
 
-class RequestSigner:
-    """httpx auth handler that injects Xiaohongshu security headers.
+class RequestSigner(httpx.Auth):
+    """httpx Auth handler that injects Xiaohongshu security headers.
 
     This is the core middleware — every request passes through it
     to have x-s, x-s-common, x-t, x-b3-traceid, x-xray-traceid,
     and x-rap-param injected automatically.
+
+    Subclasses httpx.Auth so httpx accepts it as a valid auth argument.
+
+    IMPORTANT: mirrors RedCrack XHS_Session.__request_encrypt which
+    updates loadts cookie AND fingerprint before EVERY request.
     """
 
-    def __init__(self, cookies: dict[str, str]):
+    def __init__(self, cookies: dict[str, str], fp: dict | None = None):
         self._cookies = cookies
+        self._fp = fp
 
-    async def async_auth_flow(
+    def auth_flow(
         self, request: httpx.Request
-    ) -> httpx.Request:
+    ) -> typing.Generator[httpx.Request, httpx.Response, None]:
         """Inject signature headers into the request."""
+        import time as _time
+
         try:
+            # Per RedCrack __request_encrypt: update loadts BEFORE every request
+            loadts = str(int(_time.time() * 1000))
+            self._cookies["loadts"] = loadts
+
+            # Update fingerprint (mirrors RedCrack update_fingerprint)
+            if self._fp:
+                update_fingerprint(self._fp, self._cookies, str(request.url))
+
             # Build body string for signing
             body = None
             if request.content:
@@ -47,16 +65,35 @@ class RequestSigner:
                 data=body,
                 cookies=self._cookies,
                 headers=dict(request.headers),
+                fp=self._fp,
             )
 
             # Merge into request
             for key, value in extra_headers.items():
                 request.headers[key] = value
 
+            # Remove httpx auto-added headers that trigger CDN WAF
+            # These browser-fingerprint headers cause Akamai/TencentEdgeOne to
+            # reject requests that don't have a full browser cookie set.
+            # curl (which works) doesn't send these headers.
+            # NOTE: keep 'host' — HTTP/1.1 requires it
+            for hdr in (
+                "accept-encoding",
+                "connection",
+                "sec-ch-ua",
+                "sec-ch-ua-mobile",
+                "sec-ch-ua-platform",
+                "sec-fetch-dest",
+                "sec-fetch-mode",
+                "sec-fetch-site",
+                "priority",
+            ):
+                request.headers.pop(hdr, None)
+
         except Exception as e:
             raise CryptoError(f"Failed to sign request: {e}") from e
 
-        yield request  # httpx auth flow protocol
+        yield request
 
 
 class RetryMiddleware:
@@ -78,7 +115,18 @@ class RetryMiddleware:
         next_handler,
     ) -> httpx.Response:
         for attempt in range(self.max_retries + 1):
-            response = await next_handler(request)
+            try:
+                response = await next_handler(request)
+            except httpx.TransportError as e:
+                if attempt < self.max_retries:
+                    delay = self.base_delay * (2 ** attempt)
+                    logger.warning(
+                        f"Transport error: {e} — retrying in {delay:.0f}s "
+                        f"(attempt {attempt + 1}/{self.max_retries})"
+                    )
+                    time.sleep(delay)
+                    continue
+                raise
 
             if response.status_code == 200:
                 return response
