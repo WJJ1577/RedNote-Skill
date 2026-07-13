@@ -14,7 +14,7 @@ class TestSearchId:
     def test_generates_valid_base36(self):
         sid = _generate_search_id()
         assert len(sid) > 0
-        assert all(c in "0123456789abcdefghijklmnopqrstuvwxyz" for c in sid)
+        assert all(c in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ" for c in sid)
 
 
 class TestSearchNotes:
@@ -30,12 +30,13 @@ class TestSearchNotes:
                 "cursor": "",
                 "items": [
                     {
+                        "id": "12345",
+                        "xsec_token": "xsec_abc",
+                        "model_type": "note",
                         "note_card": {
-                            "note_id": "12345",
                             "display_title": "Test Note",
                             "desc": "Test desc",
                             "type": "normal",
-                            "xsec_token": "xsec_abc",
                             "user": {
                                 "user_id": "u1",
                                 "nickname": "Tester",
