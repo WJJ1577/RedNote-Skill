@@ -1,21 +1,50 @@
-"""x-xray-traceid header generation.
+"""x-xray-traceid header generation — exact port of RedCrack header/X_Xray.py."""
 
-Format: hex timestamp + random hex, used for distributed tracing.
+from __future__ import annotations
 
-References:
-  - RedCrack header/X_Xray.py
-"""
-
-import uuid
+import math
+import random
 import time
+
+
+class _XrayState:
+    """Mutable state for x-xray seq counter — mirrors XHS_Xray_Encrypt.__seq."""
+
+    def __init__(self):
+        self.seq = self._xb3_random(23)
+
+    @staticmethod
+    def _xb3_random(e: int) -> int:
+        return math.floor(random.random() * math.pow(2, e))
+
+    def get_seq(self) -> int:
+        self.seq = self.seq + 1
+        return self.seq
+
+    def generate(self) -> str:
+        """Generate x-xray-traceid — exact port of encrypt_headers_xray.
+
+        Must be called BEFORE x-t timestamp is generated.
+        Returns a 32-char hex string.
+        """
+        seq = self.get_seq()
+        part1 = hex(int(time.time() * 1000) << 23 | seq)[2:].zfill(16)
+
+        high32 = math.floor(random.random() * math.pow(2, 32))
+        low32 = math.floor(random.random() * math.pow(2, 32))
+        long_value = (high32 << 32) | low32
+        part2 = hex(long_value)[2:].zfill(16)
+
+        return part1 + part2
+
+
+# Module-level singleton (one seq counter per process)
+_xray = _XrayState()
 
 
 def generate_x_xray_traceid() -> str:
     """Generate x-xray-traceid header value.
 
-    Returns:
-        Hex trace ID string (timestamp + random)
+    Exact port of RedCrack XHS_Xray_Encrypt.encrypt_headers_xray.
     """
-    ts_hex = hex(int(time.time()))[2:]  # Strip '0x'
-    rand_hex = uuid.uuid4().hex[:8]
-    return f"{ts_hex}{rand_hex}"
+    return _xray.generate()
