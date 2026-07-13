@@ -41,3 +41,24 @@ class TestGid:
     def test_unique(self):
         results = {generate_gid() for _ in range(10)}
         assert len(results) == 10
+
+
+from rednote_core.crypto.cookie.websectiga import generate_websectiga
+from rednote_core.crypto.cookie.acw_tc import decrypt_acw_tc
+
+
+class TestWebsectiga:
+    def test_format(self):
+        tig = generate_websectiga()
+        assert isinstance(tig, str)
+        assert len(tig) > 0
+
+    def test_unique(self):
+        results = {generate_websectiga() for _ in range(10)}
+        assert len(results) == 10
+
+
+class TestAcwTc:
+    def test_decrypt_empty(self):
+        result = decrypt_acw_tc("")
+        assert result == ""
