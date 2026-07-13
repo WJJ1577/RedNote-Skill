@@ -9,7 +9,7 @@ import yaml
 
 DEFAULT_CONFIG = {
     "client": {
-        "proxy": "http://127.0.0.1:7890",
+        "proxy": None,
         "timeout": 30,
         "retry_interval": 5,
         "request_interval": 2,
