@@ -35,6 +35,7 @@ class NoteCard:
     interact_info: Optional[InteractInfo] = None
     tag_list: list[str] = field(default_factory=list)
     image_list: list[str] = field(default_factory=list)
+    cover_url: str = ""
     time: int = 0
     ip_location: str = ""
 

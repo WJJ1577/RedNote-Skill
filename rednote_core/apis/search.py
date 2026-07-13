@@ -1,21 +1,38 @@
 """Search notes API."""
 
-import uuid
+import time
+import random
 from rednote_core.client.session import XHSClient
 from rednote_core.apis.models import SearchResult, NoteCard, UserBrief, InteractInfo
 from rednote_core.client.exceptions import ParseError
 
 
+def _base36encode(number: int, alphabet: str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ") -> str:
+    """Encode integer to base36 — exact port of RedCrack base36encode."""
+    if not isinstance(number, int):
+        raise TypeError("number must be an integer")
+    base36 = ""
+    sign = ""
+    if number < 0:
+        sign = "-"
+        number = -number
+    if 0 <= number < len(alphabet):
+        return sign + alphabet[number]
+    while number != 0:
+        number, i = divmod(number, len(alphabet))
+        base36 = alphabet[i] + base36
+    return sign + base36
+
+
 def _generate_search_id() -> str:
-    """Generate a search_id in base-36 format."""
-    raw = uuid.uuid4().bytes
-    n = int.from_bytes(raw[:8], "big")
-    alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
-    result = []
-    while n > 0:
-        n, r = divmod(n, 36)
-        result.append(alphabet[r])
-    return "".join(reversed(result)) if result else "0"
+    """Generate search_id — exact port of RedCrack get_search_id.
+
+    Format: base36encode((timestamp_ms << 64) + random_int)
+    Uses UPPERCASE alphabet (0-9A-Z).
+    """
+    e = int(time.time() * 1000) << 64
+    t = int(random.uniform(0, 2147483646))
+    return _base36encode(e + t)
 
 
 async def search_notes(
@@ -59,7 +76,13 @@ async def search_notes(
     for item in raw_items:
         nc = item.get("note_card", {})
         if nc:
-            items.append(_parse_note_card(nc))
+            # note_id and xsec_token are at item level, not inside note_card
+            note_id = item.get("id", "")
+            xsec_token = item.get("xsec_token", "")
+            card = _parse_note_card(nc)
+            card.note_id = note_id
+            card.xsec_token = xsec_token
+            items.append(card)
 
     return SearchResult(
         items=items,
@@ -71,6 +94,19 @@ async def search_notes(
 def _parse_note_card(nc: dict) -> NoteCard:
     interact = nc.get("interact_info", {})
     user = nc.get("user", {})
+
+    # Extract image URLs from image_list[].info_list[].url (WB_DFT scene)
+    image_urls = []
+    for img in nc.get("image_list", []):
+        for info in img.get("info_list", []):
+            if info.get("image_scene") == "WB_DFT":
+                image_urls.append(info.get("url", ""))
+                break
+
+    # Extract cover URL
+    cover = nc.get("cover", {})
+    cover_url = cover.get("url_default", "") or cover.get("url_pre", "")
+
     return NoteCard(
         note_id=nc.get("note_id", ""),
         title=nc.get("display_title", ""),
@@ -89,7 +125,8 @@ def _parse_note_card(nc: dict) -> NoteCard:
             share_count=int(interact.get("share_count", 0)),
         ) if interact else None,
         tag_list=[t.get("name", "") for t in nc.get("tag_list", [])],
-        image_list=[img.get("url", "") for img in nc.get("image_list", [])],
+        image_list=image_urls,
+        cover_url=cover_url,
         time=int(nc.get("time", 0)),
         ip_location=nc.get("ip_location", ""),
     )
