@@ -2,7 +2,6 @@
 """API endpoint unit tests with mocked HTTP."""
 
 import pytest
-import httpx
 from unittest.mock import AsyncMock, MagicMock
 from rednote_core.apis.models import SearchResult, NoteCard, NoteDetail, UserInfo
 from rednote_core.apis.search import search_notes, _generate_search_id
@@ -21,7 +20,7 @@ class TestSearchNotes:
     @pytest.mark.asyncio
     async def test_parses_search_response(self):
         mock_client = MagicMock()
-        mock_response = MagicMock(spec=httpx.Response)
+        mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "success": True,
@@ -70,7 +69,7 @@ class TestSearchNotes:
     @pytest.mark.asyncio
     async def test_search_failure_raises(self):
         mock_client = MagicMock()
-        mock_response = MagicMock(spec=httpx.Response)
+        mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"success": False, "msg": "error"}
         mock_client.post = AsyncMock(return_value=mock_response)
@@ -84,7 +83,7 @@ class TestNoteDetail:
     @pytest.mark.asyncio
     async def test_parses_feed_response(self):
         mock_client = MagicMock()
-        mock_response = MagicMock(spec=httpx.Response)
+        mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "success": True,
@@ -127,7 +126,7 @@ class TestUserInfo:
     @pytest.mark.asyncio
     async def test_parses_user_response(self):
         mock_client = MagicMock()
-        mock_response = MagicMock(spec=httpx.Response)
+        mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "success": True,
