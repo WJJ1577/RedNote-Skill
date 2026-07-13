@@ -6,6 +6,8 @@ build-backend = "hatchling.build"
 name = "rednote"
 version = "0.1.0"
 description = "Xiaohongshu (RedNote) data collection CLI"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.9"
 dependencies = [
     "typer>=0.9",
@@ -19,6 +21,10 @@ dependencies = [
 
 [project.scripts]
 rednote = "rednote.__main__:app"
+
+[project.urls]
+Homepage = "https://github.com/WJJ1577/RedNote-Skill"
+Repository = "https://github.com/WJJ1577/RedNote-Skill"
 
 [tool.hatch.build.targets.wheel]
 packages = ["rednote", "rednote_core"]

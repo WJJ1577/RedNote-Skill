@@ -8,6 +8,67 @@
 
 ---
 
+## 安装
+
+### 方式一：从 GitHub 直接安装（推荐）
+
+```bash
+pip install git+https://github.com/WJJ1577/RedNote-Skill.git
+```
+
+锁定特定版本/分支：
+
+```bash
+pip install git+https://github.com/WJJ1577/RedNote-Skill.git@main
+```
+
+升级到最新版：
+
+```bash
+pip install --upgrade git+https://github.com/WJJ1577/RedNote-Skill.git
+```
+
+### 方式二：本地 .whl 文件安装
+
+从仓库构建并安装：
+
+```bash
+# 克隆仓库
+git clone https://github.com/WJJ1577/RedNote-Skill.git
+cd RedNote-Skill
+
+# 构建 .whl
+make build
+
+# 安装
+pip install dist/rednote-0.1.0-py3-none-any.whl
+```
+
+或直接使用 `make install`（自动构建+安装）。
+
+### 方式三：从 GitHub Release 下载 .whl
+
+前往 [Releases](https://github.com/WJJ1577/RedNote-Skill/releases) 页面，下载最新 `.whl` 文件后安装：
+
+```bash
+pip install rednote-0.1.0-py3-none-any.whl
+```
+
+> **开发模式**（代码修改即时生效，无需重新安装）：
+> ```bash
+> pip install -e .
+> ```
+
+安装完成后，在任意目录都可以直接使用：
+
+```bash
+rednote --help
+rednote login
+rednote scrape search -k "关键词"
+```
+
+---
+
 ## 项目概述
 
 本项目创建一个 Claude Code Skill，通过 CLI 封装小红书 API 的逆向工程、请求签名、数据采集和报告生成，让 Agent 能够：
