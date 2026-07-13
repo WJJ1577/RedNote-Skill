@@ -21,19 +21,21 @@ from rednote_core.apis import (
 scrape_app = typer.Typer(help="数据采集", no_args_is_help=True)
 
 
-def _get_client() -> XHSClient:
-    """Create a configured XHSClient from saved config and cookies."""
+async def _get_client() -> XHSClient:
+    """Create a fully initialized XHSClient with saved login cookies.
+
+    Uses XHSClient.create() to run full session init (scripting + fingerprint + gid),
+    then passes saved web_session for authenticated access.
+    """
     config = load_config()
-    cookies = {
-        **generate_cookies(),
-        **load_cookies(config["auth"]["cookies_file"]),
-    }
-    return XHSClient(
+    saved = load_cookies(config["auth"]["cookies_file"])
+
+    return await XHSClient.create(
         proxy=config["client"]["proxy"],
-        cookies=cookies,
         timeout=config["client"]["timeout"],
         retry_interval=config["client"]["retry_interval"],
         request_interval=config["client"]["request_interval"],
+        web_session=saved.get("web_session"),
     )
 
 
@@ -48,13 +50,13 @@ def search(
     """搜索笔记."""
 
     async def _run():
-        client = _get_client()
+        client = await _get_client()
         try:
             type_map = {"all": 0, "image": 1, "video": 2}
             result = await search_notes(
                 client,
                 keyword=keyword,
-                page_size=min(count, 20),
+                page_size=max(count, 20),  # server requires page_size >= 20
                 sort=sort,
                 note_type=type_map.get(note_type, 0),
             )
@@ -71,6 +73,8 @@ def search(
                         "author_id": item.user.user_id if item.user else "",
                         "likes": item.interact_info.liked_count if item.interact_info else 0,
                         "xsec_token": item.xsec_token,
+                        "cover_url": item.cover_url,
+                        "image_list": item.image_list,
                         "ip_location": item.ip_location,
                     })
                 print(json.dumps(items, ensure_ascii=False, indent=2))
@@ -81,6 +85,10 @@ def search(
                     print(f"   ❤️ {item.interact_info.liked_count if item.interact_info else 0} "
                           f"⭐ {item.interact_info.collected_count if item.interact_info else 0} "
                           f"💬 {item.interact_info.comment_count if item.interact_info else 0}")
+                    if item.cover_url:
+                        print(f"   🖼️ 封面: {item.cover_url}")
+                    if item.image_list:
+                        print(f"   📸 图片 ({len(item.image_list)}张): {item.image_list[0]}")
                     print()
 
             print(f"\n共 {len(result.items)} 条结果 (has_more={result.has_more})")
@@ -98,7 +106,7 @@ def note(
     """获取笔记详情."""
 
     async def _run():
-        client = _get_client()
+        client = await _get_client()
         try:
             detail = await get_note_detail(client, note_id, xsec_token)
             print(f"📝 {detail.title}")
@@ -109,6 +117,10 @@ def note(
                   f"💬 {detail.interact_info.comment_count if detail.interact_info else 0}")
             print(f"标签: {', '.join(detail.tag_list)}")
             print(f"IP: {detail.ip_location} | 时间: {detail.time}")
+            if detail.image_list:
+                print(f"📸 图片 ({len(detail.image_list)}张):")
+                for i, url in enumerate(detail.image_list):
+                    print(f"   [{i+1}] {url}")
         finally:
             await client.close()
 
@@ -122,7 +134,7 @@ def user(
     """获取用户信息."""
 
     async def _run():
-        client = _get_client()
+        client = await _get_client()
         try:
             info = await get_user_info(client, user_id)
             print(f"👤 {info.nickname} (@{info.red_id})")
@@ -145,7 +157,7 @@ def user_notes(
     """获取用户笔记列表."""
 
     async def _run():
-        client = _get_client()
+        client = await _get_client()
         try:
             result = await get_user_notes(client, user_id, num=count)
             for note in result.notes:
@@ -166,7 +178,7 @@ def comments(
     """获取笔记评论."""
 
     async def _run():
-        client = _get_client()
+        client = await _get_client()
         try:
             result = await get_comments(client, note_id, xsec_token)
             for c in result.comments:
@@ -190,7 +202,7 @@ def homefeed(
     """
 
     async def _run():
-        client = _get_client()
+        client = await _get_client()
         try:
             result = await get_homefeed(client, category=category, num=count)
             for item in result.items:

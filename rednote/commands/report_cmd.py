@@ -16,9 +16,13 @@ report_app = typer.Typer(help="报告生成", no_args_is_help=True)
 
 def _get_client() -> XHSClient:
     config = load_config()
+    saved = load_cookies(config["auth"]["cookies_file"])
     cookies = {
         **generate_cookies(),
-        **load_cookies(config["auth"]["cookies_file"]),
+        **saved,
+        "loadts": str(int(__import__("time").time())),
+        "webBuild": "6.12.3",
+        "xsecappid": "xhs-pc-web",
     }
     return XHSClient(
         proxy=config["client"]["proxy"],
