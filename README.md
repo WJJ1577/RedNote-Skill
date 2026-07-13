@@ -2,8 +2,8 @@
 
 小红书（RedNote / Xiaohongshu）数据采集、运营分析、舆情监控 Skill — 作为 Claude Code Agent 的工具集运行。
 
-> **状态**：v1 开发中
-> **当前进度**：Phase 1 — 加密层 ⏳
+> **状态**：v1 开发完成 ✅
+> **当前进度**：Phase 1~7 全部完成 — 68 个测试通过
 > **进度详情**：[PROGRESS.md](PROGRESS.md)
 
 ---
@@ -66,6 +66,7 @@ rednote-skill/
 │   ├── apis/                    #   小红书 API 接口封装
 │   ├── auth/                    #   扫码登录流程编排
 │   ├── report/                  #   报告模板 + HTML 渲染
+│   │   └── templates/           #     base.html, daily.html, search.html
 │   └── config/                  #   配置管理
 ├── config/                      # 配置文件
 │   ├── settings.yaml            #   全局配置
